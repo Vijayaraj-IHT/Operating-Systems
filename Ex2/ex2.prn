@@ -1,0 +1,88 @@
+[vijay_3102@Vijayaraj-IHT ex2]$cat q1.c
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+int main()
+{
+    int fd[2];
+    int num, temp;
+    pipe(fd);
+    if (fork() == 0)
+    {
+        printf("Child Process\nEnter a number: ");
+        scanf("%d", &num);
+        write(fd[1], &num, sizeof(num));
+    }
+    else
+    {
+        read(fd[0], &num, sizeof(num));
+        temp = num;
+        while (temp > 1)
+        {
+            if (temp % 3 != 0) break;
+            temp = temp / 3;
+        }
+        if (temp == 1) printf("Parent: %d is a Power of 3.\n", num);
+        else printf("Parent: %d is NOT a Power of 3.\n", num);
+    }
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT ex2]$gcc q1.c
+[vijay_3102@Vijayaraj-IHT ex2]$./a.out
+Child Process
+Enter a number: Parent: 27 is a Power of 3.
+[vijay_3102@Vijayaraj-IHT ex2]$./a.out
+Child Process
+Enter a number: Parent: 20 is NOT a Power of 3.
+[vijay_3102@Vijayaraj-IHT ex2]$cat q2.c
+#include <stdio.h>
+#include <unistd.h>
+#include <string.h>
+#include <ctype.h>
+#include <sys/types.h>
+
+int main()
+{
+    int pipe1[2], pipe2[2], i;
+    char str[100], status[200];
+    pipe(pipe1); pipe(pipe2);
+    if (fork() == 0)
+    {
+        int hasNumber = 0;
+        int hasSpecial = 0;
+        read(pipe1[0], str, sizeof(str));
+        for (i = 0; str[i] != '\0'; i++)
+        {
+            if (isdigit(str[i])) hasNumber = 1;
+            if (!isalnum(str[i])) hasSpecial = 1;
+        }
+        strcpy(status, "");
+        if (strlen(str) > 7 && hasNumber == 1 && hasSpecial == 1)
+            strcpy(status, "VALID: The entered string satisfies all the conditions.");
+        else
+        {
+            strcpy(status, "INVALID:");
+            if (strlen(str) <= 7) strcat(status, "\n- Length should be greater than 7.");
+            if (hasNumber == 0) strcat(status, "\n- At least one number is required.");
+            if (hasSpecial == 0) strcat(status, "\n- At least one special character is required.");
+        }
+        write(pipe2[1], status, sizeof(status));
+    }
+    else
+    {
+        printf("PARENT PROCESS\n");
+        printf("Enter a string: ");
+        scanf("%s", str);
+        write(pipe1[1], str, sizeof(str));
+        read(pipe2[0], status, sizeof(status));
+        printf("\nResult received from Child Process:\n");
+        printf("%s\n", status);
+    }
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT ex2]$gcc q2.c
+[vijay_3102@Vijayaraj-IHT ex2]$./a.out
+PARENT PROCESS
+Enter a string: 
+Result received from Child Process:
+VALID: The entered string satisfies all the conditions.
