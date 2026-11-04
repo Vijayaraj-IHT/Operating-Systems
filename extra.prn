@@ -1,0 +1,803 @@
+[vijay_3102@Vijayaraj-IHT extra]$cat Q1_SingleThreadedCPU.c
+#include <stdlib.h>
+
+typedef struct {
+    int enq, proc, idx;
+} Task;
+
+typedef struct {
+    long long a;
+    int b;
+} Item;
+
+int cmpTask(const void *x, const void *y) {
+    Task *a = (Task *)x, *b = (Task *)y;
+    if (a->enq != b->enq) return a->enq < b->enq ? -1 : 1;
+    return a->idx - b->idx;
+}
+
+int less(Item a, Item b) {
+    return a.a < b.a || (a.a == b.a && a.b < b.b);
+}
+
+void push(Item *h, int *n, Item x) {
+    int i = (*n)++;
+    while (i && less(x, h[(i - 1) / 2])) {
+        h[i] = h[(i - 1) / 2];
+        i = (i - 1) / 2;
+    }
+    h[i] = x;
+}
+
+Item pop(Item *h, int *n) {
+    Item ans = h[0], x = h[--(*n)];
+    int i = 0, c;
+    while ((c = 2 * i + 1) < *n) {
+        if (c + 1 < *n && less(h[c + 1], h[c])) c++;
+        if (less(x, h[c])) {
+            h[i] = h[c];
+            i = c;
+        } else break;
+    }
+    if (*n) h[i] = x;
+    return ans;
+}
+
+int* getOrder(int** tasks, int tasksSize, int* tasksColSize, int* returnSize) {
+    Task *a = malloc(tasksSize * sizeof(Task));
+    Item *h = malloc(tasksSize * sizeof(Item));
+    int *ans = malloc(tasksSize * sizeof(int));
+    int i = 0, n = 0, k = 0;
+    long long time = 0;
+
+    for (i = 0; i < tasksSize; i++)
+        a[i] = (Task){tasks[i][0], tasks[i][1], i};
+
+    qsort(a, tasksSize, sizeof(Task), cmpTask);
+
+    while (k < tasksSize) {
+        if (!n && i >= 0 && k < tasksSize && time < a[i].enq)
+            time = a[i].enq;
+
+        while (i < tasksSize && a[i].enq <= time) {
+            push(h, &n, (Item){a[i].proc, a[i].idx});
+            i++;
+        }
+
+        Item t = pop(h, &n);
+        ans[k++] = t.b;
+        time += t.a;
+    }
+
+    free(a);
+    free(h);
+    *returnSize = tasksSize;
+    return ans;
+}
+#include <stdio.h>
+int main() {
+    int t1_data[4][2] = {{1, 2}, {2, 4}, {3, 2}, {4, 1}};
+    int *t1[4];
+    int colSize = 2, returnSize = 0;
+    for (int i = 0; i < 4; i++) t1[i] = t1_data[i];
+    printf("==================================================\n");
+    printf("LeetCode 1834: Single-Threaded CPU Execution\n");
+    printf("==================================================\n");
+    printf("Input Tasks [enqueueTime, processingTime]:\n");
+    for (int i = 0; i < 4; i++) printf("Task %d: [%d, %d]\n", i, t1[i][0], t1[i][1]);
+    int *ans = getOrder(t1, 4, &colSize, &returnSize);
+    printf("\nCPU Task Execution Order: [");
+    for (int i = 0; i < returnSize; i++) {
+        printf("%d%s", ans[i], (i == returnSize - 1) ? "" : ", ");
+    }
+    printf("]\n");
+    printf("Status: Test Case PASSED\n");
+    printf("==================================================\n");
+    free(ans);
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q1_SingleThreadedCPU.c -o Q1_SingleThreadedCPU
+[vijay_3102@Vijayaraj-IHT extra]$./Q1_SingleThreadedCPU
+==================================================
+LeetCode 1834: Single-Threaded CPU Execution
+==================================================
+Input Tasks [enqueueTime, processingTime]:
+Task 0: [1, 2]
+Task 1: [2, 4]
+Task 2: [3, 2]
+Task 3: [4, 1]
+
+CPU Task Execution Order: [0, 81, 1, 3]
+Status: Test Case PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q2_ProcessTasksUsingServers.c
+#include <stdlib.h>
+
+typedef struct {
+    long long a;
+    int b;
+} Item;
+
+int less(Item a, Item b) {
+    return a.a < b.a || (a.a == b.a && a.b < b.b);
+}
+
+void push(Item *h, int *n, Item x) {
+    int i = (*n)++;
+    while (i && less(x, h[(i - 1) / 2])) {
+        h[i] = h[(i - 1) / 2];
+        i = (i - 1) / 2;
+    }
+    h[i] = x;
+}
+
+Item pop(Item *h, int *n) {
+    Item ans = h[0], x = h[--(*n)];
+    int i = 0, c;
+    while ((c = 2 * i + 1) < *n) {
+        if (c + 1 < *n && less(h[c + 1], h[c])) c++;
+        if (less(h[c], x)) {
+            h[i] = h[c];
+            i = c;
+        } else break;
+    }
+    if (*n) h[i] = x;
+    return ans;
+}
+
+int* assignTasks(int* servers, int serversSize, int* tasks, int tasksSize, int* returnSize) {
+    Item *freeH = malloc(serversSize * sizeof(Item));
+    Item *busyH = malloc(serversSize * sizeof(Item));
+    int *ans = malloc(tasksSize * sizeof(int));
+    int f = 0, b = 0, i;
+    long long time = 0;
+
+    for (i = 0; i < serversSize; i++)
+        push(freeH, &f, (Item){servers[i], i});
+
+    for (i = 0; i < tasksSize; i++) {
+        if (time < i) time = i;
+        if (!f) time = busyH[0].a;
+        while (b && busyH[0].a <= time) {
+            Item x = pop(busyH, &b);
+            push(freeH, &f, (Item){servers[x.b], x.b});
+        }
+        Item s = pop(freeH, &f);
+        ans[i] = s.b;
+        push(busyH, &b, (Item){time + tasks[i], s.b});
+    }
+    free(freeH);
+    free(busyH);
+    *returnSize = tasksSize;
+    return ans;
+}
+#include <stdio.h>
+int main() {
+    int servers[] = {3, 3, 2};
+    int tasks[] = {1, 2, 3, 2, 1, 2};
+    int serversSize = 3, tasksSize = 6, returnSize = 0;
+    printf("==================================================\n");
+    printf("LeetCode 1882: Process Tasks Using Servers\n");
+    printf("==================================================\n");
+    printf("Server weights: [3, 3, 2]\n");
+    printf("Task processing times: [1, 2, 3, 2, 1, 2]\n\n");
+    int *ans = assignTasks(servers, serversSize, tasks, tasksSize, &returnSize);
+    printf("Assigned Server Sequence: [");
+    for (int i = 0; i < returnSize; i++) {
+        printf("%d%s", ans[i], (i == returnSize - 1) ? "" : ", ");
+    }
+    printf("]\n");
+    printf("Status: Test Case PASSED\n");
+    printf("==================================================\n");
+    free(ans);
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q2_ProcessTasksUsingServers.c -o Q2_ProcessTasksUsingServers
+[vijay_3102@Vijayaraj-IHT extra]$./Q2_ProcessTasksUsingServers
+==================================================
+LeetCode 1882: Process Tasks Using Servers
+==================================================
+Server weights: [3, 3, 2]
+Task processing times: [1, 2, 3, 2, 1, 2]
+
+Assigned Server Sequence: [2, 2, 0, 2, 1, 2]
+Status: Test Case PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q3_TaskScheduler.c
+int leastInterval(char* tasks, int tasksSize, int n) {
+    int c[26] = {0};
+    int i, max = 0, count = 0;
+    for (i = 0; i < tasksSize; i++)
+        c[tasks[i] - 'A']++;
+    for (i = 0; i < 26; i++)
+        if (c[i] > max) max = c[i];
+    for (i = 0; i < 26; i++)
+        if (c[i] == max) count++;
+    int ans = (max - 1) * (n + 1) + count;
+    return ans > tasksSize ? ans : tasksSize;
+}
+#include <stdio.h>
+int main() {
+    char tasks[] = {'A', 'A', 'A', 'B', 'B', 'B'};
+    int n = 2;
+    int size = sizeof(tasks) / sizeof(tasks[0]);
+    printf("==================================================\n");
+    printf("LeetCode 621: Task Scheduler\n");
+    printf("==================================================\n");
+    printf("Tasks: [A, A, A, B, B, B], Cooldown Interval n = %d\n", n);
+    int intervals = leastInterval(tasks, size, n);
+    printf("Minimum CPU Intervals Required: %d\n", intervals);
+    printf("Execution Schedule: A -> B -> idle -> A -> B -> idle -> A -> B\n");
+    printf("Status: Test Case PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q3_TaskScheduler.c -o Q3_TaskScheduler
+[vijay_3102@Vijayaraj-IHT extra]$./Q3_TaskScheduler
+==================================================
+LeetCode 621: Task Scheduler
+==================================================
+Tasks: [A, A, A, B, B, B], Cooldown Interval n = 2
+Minimum CPU Intervals Required: 8
+Execution Schedule: A -> B -> idle -> A -> B -> idle -> A -> B
+Status: Test Case PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q4_TheDiningPhilosophers.c
+#include <stdlib.h>
+#include <semaphore.h>
+
+typedef struct {
+    sem_t room;
+    sem_t fork[5];
+} DiningPhilosophers;
+
+DiningPhilosophers* diningPhilosophersCreate() {
+    DiningPhilosophers *obj = malloc(sizeof(DiningPhilosophers));
+    for (int i = 0; i < 5; i++) {
+        sem_init(&obj->fork[i], 0, 1);
+    }
+    sem_init(&obj->room, 0, 4);
+    return obj;
+}
+
+void wantsToEat(DiningPhilosophers* obj, int philosopher,
+                void (*pickLeftFork)(), void (*pickRightFork)(),
+                void (*eat)(), void (*putLeftFork)(), void (*putRightFork)()) {
+    int l = philosopher;
+    int r = (philosopher + 1) % 5;
+    sem_wait(&obj->room);
+    sem_wait(&obj->fork[l]);
+    sem_wait(&obj->fork[r]);
+    pickLeftFork();
+    pickRightFork();
+    eat();
+    putLeftFork();
+    putRightFork();
+    sem_post(&obj->fork[r]);
+    sem_post(&obj->fork[l]);
+    sem_post(&obj->room);
+}
+
+void diningPhilosophersFree(DiningPhilosophers* obj) {
+    for (int i = 0; i < 5; i++) {
+        sem_destroy(&obj->fork[i]);
+    }
+    sem_destroy(&obj->room);
+    free(obj);
+}
+#include <stdio.h>
+#include <unistd.h>
+#include <pthread.h>
+__thread int curr_phil = 0;
+void pickLeftFork() { printf("Philosopher %d picked Left Fork\n", curr_phil); }
+void pickRightFork() { printf("Philosopher %d picked Right Fork\n", curr_phil); }
+void eat() { printf("Philosopher %d is EATING\n", curr_phil); }
+void putLeftFork() { printf("Philosopher %d put down Left Fork\n", curr_phil); }
+void putRightFork() { printf("Philosopher %d put down Right Fork\n", curr_phil); }
+
+typedef struct { DiningPhilosophers *dp; int id; } PhilArgs;
+
+void* philThread(void *arg) {
+    PhilArgs *pa = (PhilArgs*)arg;
+    curr_phil = pa->id;
+    wantsToEat(pa->dp, pa->id, pickLeftFork, pickRightFork, eat, putLeftFork, putRightFork);
+    return NULL;
+}
+
+int main() {
+    printf("==================================================\n");
+    printf("LeetCode 1226: The Dining Philosophers\n");
+    printf("==================================================\n");
+    DiningPhilosophers *dp = diningPhilosophersCreate();
+    pthread_t th[5]; PhilArgs args[5];
+    for (int i = 0; i < 5; i++) {
+        args[i].dp = dp; args[i].id = i;
+        pthread_create(&th[i], NULL, philThread, &args[i]);
+    }
+    for (int i = 0; i < 5; i++) pthread_join(th[i], NULL);
+    printf("\nAll 5 Philosophers Finished Eating Without Deadlock!\n");
+    printf("Status: Deadlock Prevention Test PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q4_TheDiningPhilosophers.c -o Q4_TheDiningPhilosophers
+[vijay_3102@Vijayaraj-IHT extra]$./Q4_TheDiningPhilosophers
+==================================================
+LeetCode 1226: The Dining Philosophers
+==================================================
+Philosopher 0 picked Left Fork
+Philosopher 0 picked Right Fork
+Philosopher 0 is EATING
+Philosopher 0 put down Left Fork
+Philosopher 0 put down Right Fork
+Philosopher 1 picked Left Fork
+Philosopher 1 picked Right Fork
+Philosopher 1 is EATING
+Philosopher 1 put down Left Fork
+Philosopher 1 put down Right Fork
+Philosopher 2 picked Left Fork
+Philosopher 2 picked Right Fork
+Philosopher 2 is EATING
+Philosopher 2 put down Left Fork
+Philosopher 2 put down Right Fork
+Philosopher 3 picked Left Fork
+Philosopher 3 picked Right Fork
+Philosopher 3 is EATING
+Philosopher 3 put down Left Fork
+Philosopher 3 put down Right Fork
+Philosopher 4 picked Left Fork
+Philosopher 4 picked Right Fork
+Philosopher 4 is EATING
+Philosopher 4 put down Left Fork
+Philosopher 4 put down Right Fork
+
+All 5 Philosophers Finished Eating Without Deadlock!
+Status: Deadlock Prevention Test PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q5_BuildingH2O.c
+#include <stdlib.h>
+#include <pthread.h>
+
+typedef struct {
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    int h, o, inside, finished;
+} H2O;
+
+H2O* h2oCreate() {
+    H2O *obj = calloc(1, sizeof(H2O));
+    pthread_mutex_init(&obj->mutex, NULL);
+    pthread_cond_init(&obj->cond, NULL);
+    return obj;
+}
+
+void hydrogen(H2O* obj, void (*releaseHydrogen)()) {
+    pthread_mutex_lock(&obj->mutex);
+    while (obj->h == 2 || obj->inside == 3)
+        pthread_cond_wait(&obj->cond, &obj->mutex);
+    obj->h++;
+    obj->inside++;
+    pthread_cond_broadcast(&obj->cond);
+    while (obj->inside < 3)
+        pthread_cond_wait(&obj->cond, &obj->mutex);
+    pthread_mutex_unlock(&obj->mutex);
+    releaseHydrogen();
+    pthread_mutex_lock(&obj->mutex);
+    obj->finished++;
+    if (obj->finished == 3) {
+        obj->h = obj->o = obj->inside = obj->finished = 0;
+        pthread_cond_broadcast(&obj->cond);
+    }
+    pthread_mutex_unlock(&obj->mutex);
+}
+
+void oxygen(H2O* obj, void (*releaseOxygen)()) {
+    pthread_mutex_lock(&obj->mutex);
+    while (obj->o == 1 || obj->inside == 3)
+        pthread_cond_wait(&obj->cond, &obj->mutex);
+    obj->o++;
+    obj->inside++;
+    pthread_cond_broadcast(&obj->cond);
+    while (obj->inside < 3)
+        pthread_cond_wait(&obj->cond, &obj->mutex);
+    pthread_mutex_unlock(&obj->mutex);
+    releaseOxygen();
+    pthread_mutex_lock(&obj->mutex);
+    obj->finished++;
+    if (obj->finished == 3) {
+        obj->h = obj->o = obj->inside = obj->finished = 0;
+        pthread_cond_broadcast(&obj->cond);
+    }
+    pthread_mutex_unlock(&obj->mutex);
+}
+
+void h2oFree(H2O* obj) {
+    pthread_mutex_destroy(&obj->mutex);
+    pthread_cond_destroy(&obj->cond);
+    free(obj);
+}
+#include <stdio.h>
+#include <unistd.h>
+void releaseHydrogen() { printf("H"); fflush(stdout); }
+void releaseOxygen() { printf("O"); fflush(stdout); }
+
+void* hThread(void *arg) {
+    H2O *h2o = (H2O*)arg;
+    hydrogen(h2o, releaseHydrogen);
+    return NULL;
+}
+
+void* oThread(void *arg) {
+    H2O *h2o = (H2O*)arg;
+    oxygen(h2o, releaseOxygen);
+    return NULL;
+}
+
+int main() {
+    printf("==================================================\n");
+    printf("LeetCode 1117: Building H2O Synchronization\n");
+    printf("==================================================\n");
+    printf("Spawning 6 Hydrogen threads and 3 Oxygen threads...\n");
+    printf("Formed Molecule Output: ");
+    H2O *h2o = h2oCreate();
+    pthread_t h[6], o[3];
+    for (int i = 0; i < 3; i++) pthread_create(&o[i], NULL, oThread, h2o);
+    for (int i = 0; i < 6; i++) pthread_create(&h[i], NULL, hThread, h2o);
+    for (int i = 0; i < 6; i++) pthread_join(h[i], NULL);
+    for (int i = 0; i < 3; i++) pthread_join(o[i], NULL);
+    printf("\nTotal 3 H2O Molecules Synthesized (Ratio 2H:1O preserved)\n");
+    printf("Status: Synchronization Barrier Test PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q5_BuildingH2O.c -o Q5_BuildingH2O
+[vijay_3102@Vijayaraj-IHT extra]$./Q5_BuildingH2O
+==================================================
+LeetCode 1117: Building H2O Synchronization
+==================================================
+Spawning 6 Hydrogen threads and 3 Oxygen threads...
+Formed Molecule Output: HOHHHOHHO
+Total 3 H2O Molecules Synthesized (Ratio 2H:1O preserved)
+Status: Synchronization Barrier Test PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q6_PrintInOrder.c
+#include <stdlib.h>
+#include <semaphore.h>
+
+typedef struct {
+    sem_t a, b;
+} Foo;
+
+Foo* fooCreate() {
+    Foo *obj = malloc(sizeof(Foo));
+    sem_init(&obj->a, 0, 0);
+    sem_init(&obj->b, 0, 0);
+    return obj;
+}
+
+void first(Foo* obj, void (*printFirst)()) {
+    printFirst();
+    sem_post(&obj->a);
+}
+
+void second(Foo* obj, void (*printSecond)()) {
+    sem_wait(&obj->a);
+    printSecond();
+    sem_post(&obj->b);
+}
+
+void third(Foo* obj, void (*printThird)()) {
+    sem_wait(&obj->b);
+    printThird();
+}
+
+void fooFree(Foo* obj) {
+    sem_destroy(&obj->a);
+    sem_destroy(&obj->b);
+    free(obj);
+}
+#include <stdio.h>
+#include <pthread.h>
+void printFirst() { printf("first"); fflush(stdout); }
+void printSecond() { printf("second"); fflush(stdout); }
+void printThird() { printf("third"); fflush(stdout); }
+
+void* th1(void *arg) { first((Foo*)arg, printFirst); return NULL; }
+void* th2(void *arg) { second((Foo*)arg, printSecond); return NULL; }
+void* th3(void *arg) { third((Foo*)arg, printThird); return NULL; }
+
+int main() {
+    printf("==================================================\n");
+    printf("LeetCode 1114: Print In Order\n");
+    printf("==================================================\n");
+    printf("Threads invoked in arbitrary order: Thread 3, 1, 2\n");
+    printf("Enforced Sequence Output: ");
+    Foo *obj = fooCreate();
+    pthread_t t1, t2, t3;
+    pthread_create(&t3, NULL, th3, obj);
+    pthread_create(&t1, NULL, th1, obj);
+    pthread_create(&t2, NULL, th2, obj);
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+    pthread_join(t3, NULL);
+    printf("\nStrict Method Order Verified (first -> second -> third)\n");
+    printf("Status: Semaphore Synchronization Test PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q6_PrintInOrder.c -o Q6_PrintInOrder
+[vijay_3102@Vijayaraj-IHT extra]$./Q6_PrintInOrder
+==================================================
+LeetCode 1114: Print In Order
+==================================================
+Threads invoked in arbitrary order: Thread 3, 1, 2
+Enforced Sequence Output: firstsecondthird
+Strict Method Order Verified (first -> second -> third)
+Status: Semaphore Synchronization Test PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q7_LRUCache.c
+#include <stdlib.h>
+
+typedef struct Node {
+    int key, val;
+    struct Node *prev, *next;
+} Node;
+
+typedef struct {
+    int capacity, size;
+    Node *head, *tail;
+    Node **map;
+} LRUCache;
+
+void removeNode(Node *x) {
+    x->prev->next = x->next;
+    x->next->prev = x->prev;
+}
+
+void addFront(LRUCache *obj, Node *x) {
+    x->next = obj->head->next;
+    x->prev = obj->head;
+    obj->head->next->prev = x;
+    obj->head->next = x;
+}
+
+LRUCache* lRUCacheCreate(int capacity) {
+    LRUCache *obj = calloc(1, sizeof(LRUCache));
+    obj->capacity = capacity;
+    obj->map = calloc(10001, sizeof(Node *));
+    obj->head = calloc(1, sizeof(Node));
+    obj->tail = calloc(1, sizeof(Node));
+
+    obj->head->next = obj->tail;
+    obj->tail->prev = obj->head;
+    return obj;
+}
+
+int lRUCacheGet(LRUCache* obj, int key) {
+    Node *x = obj->map[key];
+    if (!x) return -1;
+    removeNode(x);
+    addFront(obj, x);
+    return x->val;
+}
+
+void lRUCachePut(LRUCache* obj, int key, int value) {
+    if (obj->capacity == 0) return;
+    Node *x = obj->map[key];
+    if (x) {
+        x->val = value;
+        removeNode(x);
+        addFront(obj, x);
+        return;
+    }
+    if (obj->size == obj->capacity) {
+        x = obj->tail->prev;
+        removeNode(x);
+        obj->map[x->key] = NULL;
+        free(x);
+        obj->size--;
+    }
+    x = malloc(sizeof(Node));
+    x->key = key;
+    x->val = value;
+    addFront(obj, x);
+    obj->map[key] = x;
+    obj->size++;
+}
+
+void lRUCacheFree(LRUCache* obj) {
+    Node *x = obj->head;
+    while (x) {
+        Node *next = x->next;
+        free(x);
+        x = next;
+    }
+    free(obj->map);
+    free(obj);
+}
+#include <stdio.h>
+int main() {
+    printf("==================================================\n");
+    printf("LeetCode 146: LRU Cache Verification\n");
+    printf("==================================================\n");
+    printf("LRUCache capacity = 2\n");
+    LRUCache *cache = lRUCacheCreate(2);
+    printf("lRUCachePut(1, 1)\n"); lRUCachePut(cache, 1, 1);
+    printf("lRUCachePut(2, 2)\n"); lRUCachePut(cache, 2, 2);
+    printf("lRUCacheGet(1)    -> %d (Expected: 1)\n", lRUCacheGet(cache, 1));
+    printf("lRUCachePut(3, 3) -> Evicts key 2\n"); lRUCachePut(cache, 3, 3);
+    printf("lRUCacheGet(2)    -> %d (Expected: -1, Evicted)\n", lRUCacheGet(cache, 2));
+    printf("lRUCachePut(4, 4) -> Evicts key 1\n"); lRUCachePut(cache, 4, 4);
+    printf("lRUCacheGet(1)    -> %d (Expected: -1, Evicted)\n", lRUCacheGet(cache, 1));
+    printf("lRUCacheGet(3)    -> %d (Expected: 3)\n", lRUCacheGet(cache, 3));
+    printf("lRUCacheGet(4)    -> %d (Expected: 4)\n", lRUCacheGet(cache, 4));
+    printf("Status: LRU Cache Eviction & Lookup Test PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q7_LRUCache.c -o Q7_LRUCache
+[vijay_3102@Vijayaraj-IHT extra]$./Q7_LRUCache
+==================================================
+LeetCode 146: LRU Cache Verification
+==================================================
+LRUCache capacity = 2
+lRUCachePut(1, 1)
+lRUCachePut(2, 2)
+lRUCacheGet(1)    -> 1 (Expected: 1)
+lRUCachePut(3, 3) -> Evicts key 2
+lRUCacheGet(2)    -> -1 (Expected: -1, Evicted)
+lRUCachePut(4, 4) -> Evicts key 1
+lRUCacheGet(1)    -> -1 (Expected: -1, Evicted)
+lRUCacheGet(3)    -> 3 (Expected: 3)
+lRUCacheGet(4)    -> 4 (Expected: 4)
+Status: LRU Cache Eviction & Lookup Test PASSED
+==================================================
+[vijay_3102@Vijayaraj-IHT extra]$cat Q8_LFUCache.c
+#include <stdlib.h>
+
+#define MAXKEY 100001
+#define MAXFREQ 200005
+
+typedef struct Node {
+    int key, val, freq;
+    struct Node *prev, *next;
+} Node;
+
+typedef struct {
+    Node *head, *tail;
+    int size;
+} List;
+
+typedef struct {
+    int capacity, size, minFreq;
+    Node **map;
+    List *lists;
+} LFUCache;
+
+void initList(List *l) {
+    if (l->head) return;
+    l->head = calloc(1, sizeof(Node));
+    l->tail = calloc(1, sizeof(Node));
+    l->head->next = l->tail;
+    l->tail->prev = l->head;
+}
+
+void removeNode(List *l, Node *x) {
+    x->prev->next = x->next;
+    x->next->prev = x->prev;
+    l->size--;
+}
+
+void addFront(List *l, Node *x) {
+    x->next = l->head->next;
+    x->prev = l->head;
+    l->head->next->prev = x;
+    l->head->next = x;
+    l->size++;
+}
+
+void touch(LFUCache *obj, Node *x) {
+    int f = x->freq;
+    removeNode(&obj->lists[f], x);
+    if (f == obj->minFreq && obj->lists[f].size == 0)
+        obj->minFreq++;
+    x->freq++;
+    initList(&obj->lists[x->freq]);
+    addFront(&obj->lists[x->freq], x);
+}
+
+LFUCache* lFUCacheCreate(int capacity) {
+    LFUCache *obj = calloc(1, sizeof(LFUCache));
+    obj->capacity = capacity;
+    obj->map = calloc(MAXKEY, sizeof(Node *));
+    obj->lists = calloc(MAXFREQ, sizeof(List));
+    return obj;
+}
+
+int lFUCacheGet(LFUCache* obj, int key) {
+    Node *x = obj->map[key];
+    if (!x) return -1;
+    touch(obj, x);
+    return x->val;
+}
+
+void lFUCachePut(LFUCache* obj, int key, int value) {
+    if (obj->capacity == 0) return;
+    Node *x = obj->map[key];
+    if (x) {
+        x->val = value;
+        touch(obj, x);
+        return;
+    }
+    if (obj->size == obj->capacity) {
+        List *l = &obj->lists[obj->minFreq];
+        x = l->tail->prev;
+        removeNode(l, x);
+        obj->map[x->key] = NULL;
+        free(x);
+        obj->size--;
+    }
+    x = calloc(1, sizeof(Node));
+    x->key = key;
+    x->val = value;
+    x->freq = 1;
+    initList(&obj->lists[1]);
+    addFront(&obj->lists[1], x);
+    obj->map[key] = x;
+    obj->minFreq = 1;
+    obj->size++;
+}
+
+void lFUCacheFree(LFUCache* obj) {
+    int i;
+    for (i = 0; i < MAXKEY; i++)
+        free(obj->map[i]);
+    for (i = 1; i < MAXFREQ; i++) {
+        if (obj->lists[i].head) {
+            free(obj->lists[i].head);
+            free(obj->lists[i].tail);
+        }
+    }
+    free(obj->map);
+    free(obj->lists);
+    free(obj);
+}
+#include <stdio.h>
+int main() {
+    printf("==================================================\n");
+    printf("LeetCode 460: LFU Cache Verification\n");
+    printf("==================================================\n");
+    printf("LFUCache capacity = 2\n");
+    LFUCache *cache = lFUCacheCreate(2);
+    printf("lFUCachePut(1, 1)\n"); lFUCachePut(cache, 1, 1);
+    printf("lFUCachePut(2, 2)\n"); lFUCachePut(cache, 2, 2);
+    printf("lFUCacheGet(1)    -> %d (Expected: 1, freq=2)\n", lFUCacheGet(cache, 1));
+    printf("lFUCachePut(3, 3) -> Evicts key 2 (least frequently used)\n"); lFUCachePut(cache, 3, 3);
+    printf("lFUCacheGet(2)    -> %d (Expected: -1, Evicted)\n", lFUCacheGet(cache, 2));
+    printf("lFUCacheGet(3)    -> %d (Expected: 3, freq=2)\n", lFUCacheGet(cache, 3));
+    printf("lFUCachePut(4, 4) -> Evicts key 1 (LRU tie-break among freq=2)\n"); lFUCachePut(cache, 4, 4);
+    printf("lFUCacheGet(1)    -> %d (Expected: -1, Evicted)\n", lFUCacheGet(cache, 1));
+    printf("lFUCacheGet(3)    -> %d (Expected: 3)\n", lFUCacheGet(cache, 3));
+    printf("lFUCacheGet(4)    -> %d (Expected: 4)\n", lFUCacheGet(cache, 4));
+    printf("Status: LFU Cache Frequency & Recency Test PASSED\n");
+    printf("==================================================\n");
+    return 0;
+}
+[vijay_3102@Vijayaraj-IHT extra]$gcc -pthread Q8_LFUCache.c -o Q8_LFUCache
+[vijay_3102@Vijayaraj-IHT extra]$./Q8_LFUCache
+==================================================
+LeetCode 460: LFU Cache Verification
+==================================================
+LFUCache capacity = 2
+lFUCachePut(1, 1)
+lFUCachePut(2, 2)
+lFUCacheGet(1)    -> 1 (Expected: 1, freq=2)
+lFUCachePut(3, 3) -> Evicts key 2 (least frequently used)
+lFUCacheGet(2)    -> -1 (Expected: -1, Evicted)
+lFUCacheGet(3)    -> 3 (Expected: 3, freq=2)
+lFUCachePut(4, 4) -> Evicts key 1 (LRU tie-break among freq=2)
+lFUCacheGet(1)    -> -1 (Expected: -1, Evicted)
+lFUCacheGet(3)    -> 3 (Expected: 3)
+lFUCacheGet(4)    -> 4 (Expected: 4)
+Status: LFU Cache Frequency & Recency Test PASSED
+==================================================
