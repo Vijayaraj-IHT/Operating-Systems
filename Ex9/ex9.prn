@@ -1,0 +1,444 @@
+
+[vijay_3102@Vijayaraj-IHT ex9]$cat head.h
+
+#ifndef HEAD_H
+#define HEAD_H
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define MAX 100
+
+void display(int sequence[], int n);
+void FCFS(int requests[], int n, int head);
+void SSTF(int requests[], int n, int head);
+void SCAN(int requests[], int n, int head, int disk_size, int direction);
+void CSCAN(int requests[], int n, int head, int disk_size, int direction);
+void LOOK(int requests[], int n, int head, int direction);
+void CLOOK(int requests[], int n, int head, int direction);
+
+#endif
+
+[vijay_3102@Vijayaraj-IHT ex9]$cat imp.c
+
+#include "head.h"
+
+void display(int sequence[], int n)
+{
+    int i;
+    for (i = 0; i < n; i++)
+    {
+        printf("%d", sequence[i]);
+        if (i != n - 1) printf(" -> ");
+    }
+    printf("\n");
+}
+
+void FCFS(int requests[], int n, int head)
+{
+    int sequence[MAX], i, total = 0, current = head;
+    printf("\nFCFS Disk Scheduling:\n");
+    sequence[0] = head;
+    for (i = 0; i < n; i++)
+    {
+        sequence[i + 1] = requests[i];
+        total += abs(current - requests[i]);
+        current = requests[i];
+    }
+    printf("Seek Sequence: "); display(sequence, n + 1);
+    printf("Total Head Movement = %d\n", total);
+}
+
+void SSTF(int requests[], int n, int head)
+{
+    int visited[MAX] = {0}, sequence[MAX], i, j, current = head, total = 0, min, distance, index;
+    printf("\nSSTF Disk Scheduling:\n"); sequence[0] = head;
+    for (i = 0; i < n; i++)
+    {
+        min = 99999; index = -1;
+        for (j = 0; j < n; j++)
+            if (visited[j] == 0)
+            {
+                distance = abs(current - requests[j]);
+                if (distance < min)
+                {
+                    min = distance;
+                    index = j;
+
+                }
+
+            }
+        visited[index] = 1; current = requests[index];
+        sequence[i + 1] = current; total += min;
+    }
+    printf("Seek Sequence: "); display(sequence, n + 1);
+    printf("Total Head Movement = %d\n", total);
+}
+
+void SCAN(int requests[], int n, int head, int disk_size, int direction)
+{
+    int a[MAX], sequence[MAX], i, j, temp, pos = 0, current = head, total = 0;
+    for (i = 0; i < n; i++) a[i] = requests[i];
+    for (i = 0; i < n - 1; i++)
+        for (j = i + 1; j < n; j++)
+            if (a[i] > a[j])
+            {
+
+                temp = a[i];
+                a[i] = a[j];
+                a[j] = temp;
+            }
+    while (pos < n && a[pos] < head) pos++;
+    sequence[0] = head; i = 1;
+    if (direction == 1)
+    {
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        if (current != disk_size - 1)
+        {
+            sequence[i++] = disk_size - 1;
+            total += abs(current - (disk_size - 1));
+            current = disk_size - 1;
+        }
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    else
+    {
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        if (current != 0)
+        {
+            sequence[i++] = 0;
+            total += current;
+            current = 0;
+        }
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    printf("\nSCAN Disk Scheduling:\nSeek Sequence: "); display(sequence, i);
+    printf("Total Head Movement = %d\n", total);
+}
+void CSCAN(int requests[], int n, int head, int disk_size, int direction)
+{
+    int a[MAX], sequence[MAX], i, j, temp, pos = 0, current = head, total = 0;
+    for (i = 0; i < n; i++) a[i] = requests[i];
+    for (i = 0; i < n - 1; i++)
+        for (j = i + 1; j < n; j++)
+            if (a[i] > a[j])
+            {
+                temp = a[i];
+                a[i] = a[j];
+                a[j] = temp;
+            }
+    while (pos < n && a[pos] < head) pos++;
+    sequence[0] = head; i = 1;
+    if (direction == 1)
+    {
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        if (current != disk_size - 1)
+        {
+            sequence[i++] = disk_size - 1;
+            total += abs(current - (disk_size - 1));
+            current = disk_size - 1;
+        }
+        sequence[i++] = 0;
+        total += disk_size - 1; current = 0;
+        for (j = 0; j < pos; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    else
+    {
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        if (current != 0)
+        {
+            sequence[i++] = 0;
+            total += current;
+            current = 0;
+        }
+        sequence[i++] = disk_size - 1;
+        total += disk_size - 1;
+        current = disk_size - 1;
+        for (j = n - 1; j >= pos; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    printf("\nC-SCAN Disk Scheduling:\nSeek Sequence: "); 
+    display(sequence, i);
+    printf("Total Head Movement = %d\n", total);
+}
+void LOOK(int requests[], int n, int head, int direction)
+{
+    int a[MAX], sequence[MAX], i, j, temp, pos = 0, current = head, total = 0;
+    for (i = 0; i < n; i++) a[i] = requests[i];
+    for (i = 0; i < n - 1; i++)
+        for (j = i + 1; j < n; j++)
+            if (a[i] > a[j])
+            {
+                temp = a[i];
+                a[i] = a[j];
+                a[j] = temp;
+            }
+    while (pos < n && a[pos] < head) pos++;
+    sequence[0] = head; i = 1;
+    if (direction == 1)
+    {
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    else
+    {
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        }
+    }
+    printf("\nLOOK Disk Scheduling:\nSeek Sequence: ");
+    display(sequence, i);
+    printf("Total Head Movement = %d\n", total);
+
+}
+void CLOOK(int requests[], int n, int head, int direction)
+{
+    int a[MAX], sequence[MAX], i, j, temp, pos = 0, current = head, total = 0;
+    for (i = 0; i < n; i++) a[i] = requests[i];
+    for (i = 0; i < n - 1; i++)
+        for (j = i + 1; j < n; j++)
+            if (a[i] > a[j])
+            {
+                temp = a[i];
+                a[i] = a[j];
+                a[j] = temp;
+            }
+    while (pos < n && a[pos] < head) pos++;
+    sequence[0] = head; i = 1;
+    if (direction == 1)
+    { 
+        for (j = pos; j < n; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j]; 
+        } 
+        if (pos > 0)
+        {
+            sequence[i++] = a[0];
+            total += abs(current - a[0]);
+            current = a[0];
+        } 
+        for (j = 1; j < pos; j++)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j]; 
+        } 
+    }
+    else
+    {
+        for (j = pos - 1; j >= 0; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        } 
+
+        if (pos < n)
+        {
+            sequence[i++] = a[n - 1];
+            total += abs(current - a[n - 1]);
+            current = a[n - 1];
+        } 
+
+        for (j = n - 2; j >= pos; j--)
+        {
+            sequence[i++] = a[j];
+            total += abs(current - a[j]);
+            current = a[j];
+        } 
+
+    } 
+    printf("\nC-LOOK Disk Scheduling:\nSeek Sequence: "); 
+    display(sequence, i);
+    printf("Total Head Movement = %d\n", total);
+}
+
+[vijay_3102@Vijayaraj-IHT ex9]$cat app.c
+
+#include "head.h"
+int main()
+{
+    int requests[MAX], n, head, disk_size, direction, choice, i;
+    printf("Enter number of disk requests: "); scanf("%d", &n);
+    printf("Enter the request sequence:\n");
+    for (i = 0; i < n; i++) scanf("%d", &requests[i]);
+    printf("Enter initial head position: "); scanf("%d", &head);
+    printf("Enter disk size: "); scanf("%d", &disk_size);
+    printf("\nEnter direction:\n1. Right\n2. Left\nEnter choice: "); scanf("%d", &direction);
+    if (direction == 2) direction = 0;
+    while (1)
+    {
+        printf("\n----- Disk Scheduling -----\n");
+        printf("1. FCFS\n2. SSTF\n3. SCAN\n4. C-SCAN\n");
+        printf("5. LOOK\n6. C-LOOK\n7. Exit\nEnter choice: "); scanf("%d", &choice);
+        switch (choice)
+        {
+            case 1: FCFS(requests, n, head); break;
+            case 2: SSTF(requests, n, head); break;
+            case 3: SCAN(requests, n, head, disk_size, direction); break;
+            case 4: CSCAN(requests, n, head, disk_size, direction); break;
+            case 5: LOOK(requests, n, head, direction); break;
+            case 6: CLOOK(requests, n, head, direction); break;
+            case 7: printf("Exiting...\n"); return 0;
+            default: printf("Invalid choice!\n");
+        }
+    }
+}
+
+[vijay_3102@Vijayaraj-IHT ex9]$gcc imp.c app.c
+[vijay_3102@Vijayaraj-IHT ex9]$./a.out
+
+Enter number of disk requests: Enter the request sequence:
+Enter initial head position: Enter disk size: 
+Enter direction:
+1. Right
+2. Left
+Enter choice: 
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+FCFS Disk Scheduling:
+Seek Sequence: 53 -> 98 -> 183 -> 37 -> 122 -> 14 -> 124 -> 65 -> 67
+Total Head Movement = 640
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+SSTF Disk Scheduling:
+Seek Sequence: 53 -> 65 -> 67 -> 37 -> 14 -> 98 -> 122 -> 124 -> 183
+Total Head Movement = 236
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+SCAN Disk Scheduling:
+Seek Sequence: 53 -> 65 -> 67 -> 98 -> 122 -> 124 -> 183 -> 199 -> 37 -> 14
+Total Head Movement = 331
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+C-SCAN Disk Scheduling:
+Seek Sequence: 53 -> 65 -> 67 -> 98 -> 122 -> 124 -> 183 -> 199 -> 0 -> 14 -> 37
+Total Head Movement = 382
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+LOOK Disk Scheduling:
+Seek Sequence: 53 -> 65 -> 67 -> 98 -> 122 -> 124 -> 183 -> 37 -> 14
+Total Head Movement = 299
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: 
+C-LOOK Disk Scheduling:
+Seek Sequence: 53 -> 65 -> 67 -> 98 -> 122 -> 124 -> 183 -> 14 -> 37
+Total Head Movement = 322
+
+----- Disk Scheduling -----
+1. FCFS
+2. SSTF
+3. SCAN
+4. C-SCAN
+5. LOOK
+6. C-LOOK
+7. Exit
+Enter choice: Exiting...
+
